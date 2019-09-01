@@ -11,23 +11,16 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using Microsoft.Azure.CognitiveServices.FormRecognizer;
+
 
 namespace Tailwind.Traders.InvoiceReaderSkill
 {
     public static class InvoiceReaderSkill
     {
         // Forms Recognizer Credentials
-        static readonly ApiKeyServiceClientCredentials credentials = 
-            new ApiKeyServiceClientCredentials(GetEnv("FormsRecognizerKey"));
-        
-        // Forms Recognizer Client
-        static readonly IFormRecognizerClient formsClient = new FormRecognizerClient(credentials) {
-            Endpoint = GetEnv("FormsRecognizerEndpoint")
-        };
-
-        // Forms Recognize Model
-        static readonly Guid ModelId = Guid.Parse(GetEnv("ModelId"));
+        static readonly string formsRecognizerKey = GetEnv("FormsRecognizerKey");
+        static readonly string formsRecognizerEndpoint = GetEnv("FormsRecognizerEndpoint");
+        static readonly string modelId = GetEnv("FormsRecognizerEndpoint");
 
         [FunctionName("AnalyzeInvoice")]
         public static async Task<IActionResult> Run(
@@ -48,10 +41,9 @@ namespace Tailwind.Traders.InvoiceReaderSkill
                     string url = record.data.formUrl;
                     string token = record.data.formSasToken;
 
-                    var stream = await client.OpenReadTaskAsync($"{url}{token}");
-                    var result = await formsClient.AnalyzeWithCustomModelAsync(ModelId, 
-                                    stream, 
-                                    contentType: "application/pdf");
+                    var pdfBits = await client.DownloadDataTaskAsync($"{url}{token}");
+                    
+                    
                 }
             }
 
