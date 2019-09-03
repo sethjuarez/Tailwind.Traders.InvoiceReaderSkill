@@ -20,7 +20,7 @@ namespace Tailwind.Traders.InvoiceReaderSkill
         // Forms Recognizer Credentials
         static readonly string formsRecognizerKey = GetEnv("FormsRecognizerKey");
         static readonly string formsRecognizerEndpoint = GetEnv("FormsRecognizerEndpoint");
-        static readonly string modelId = GetEnv("FormsRecognizerEndpoint");
+        static readonly string modelId = GetEnv("ModelId");
 
         [FunctionName("AnalyzeInvoice")]
         public static async Task<IActionResult> Run(
@@ -29,10 +29,21 @@ namespace Tailwind.Traders.InvoiceReaderSkill
         {
             log.LogInformation("Analyze Invoice SKill: C# HTTP trigger function processed a request.");
 
+            // forms endpoint
+            var uri = $"https://{formsRecognizerEndpoint}/formrecognizer/v1.0-preview/custom/models/{modelId}/analyze";
+
+            Func<byte[], HttpRequestMessage> message = bits => {
+                var request = new HttpRequestMessage(HttpMethod.Post, uri);
+                request.Content = new ByteArrayContent(bits);
+                request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+                request.Headers.Add("Ocp-Apim-Subscription-Key", formsRecognizerKey);
+                return request;
+            };
 
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
             dynamic data = JsonConvert.DeserializeObject(requestBody);
 
+            List<object> records = new List<object>();
             using (WebClient client = new WebClient())
             {
                 foreach (var record in data.values)
@@ -42,12 +53,22 @@ namespace Tailwind.Traders.InvoiceReaderSkill
                     string token = record.data.formSasToken;
 
                     var pdfBits = await client.DownloadDataTaskAsync($"{url}{token}");
-                    
-                    
+                    using (var formsClient = new HttpClient())
+                    using (var formsRequest = message(pdfBits))
+                    {
+                        var response = await formsClient.SendAsync(formsRequest);
+                        var formsResponse = await response.Content.ReadAsStringAsync();
+
+                        records.Add(new {
+                            recordId = recordId,
+                            data = new { formUrl = url },
+                            invoice = Parser.Parse(formsResponse)
+                        });
+                    }
                 }
             }
 
-            return new OkObjectResult(new { data = "good job!" });
+            return new OkObjectResult(new { values = records.ToArray() });
         }
 
         public static string GetEnv(string name)
