@@ -4,6 +4,7 @@
 # Misc
 .cr/
 .vs/
+PublishProfiles/
 
 # Azure Functions localsettings file
 local.settings.json

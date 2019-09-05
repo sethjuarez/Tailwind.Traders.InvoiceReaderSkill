@@ -42,8 +42,9 @@ namespace Tailwind.Traders.InvoiceReaderSkill
 
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
             dynamic data = JsonConvert.DeserializeObject(requestBody);
-
+            
             List<object> records = new List<object>();
+            
             using (WebClient client = new WebClient())
             {
                 foreach (var record in data.values)
@@ -51,18 +52,38 @@ namespace Tailwind.Traders.InvoiceReaderSkill
                     string recordId = record.recordId;
                     string url = record.data.formUrl;
                     string token = record.data.formSasToken;
-
-                    var pdfBits = await client.DownloadDataTaskAsync($"{url}{token}");
-                    using (var formsClient = new HttpClient())
-                    using (var formsRequest = message(pdfBits))
+                    try
                     {
-                        var response = await formsClient.SendAsync(formsRequest);
-                        var formsResponse = await response.Content.ReadAsStringAsync();
-
-                        records.Add(new {
+                        var pdfBits = await client.DownloadDataTaskAsync($"{url}{token}");
+                        using (var formsClient = new HttpClient())
+                        using (var formsRequest = message(pdfBits))
+                        {
+                            var response = await formsClient.SendAsync(formsRequest);
+                            var formsResponse = await response.Content.ReadAsStringAsync();
+                            var invoice = Parser.Parse(formsResponse);
+                            records.Add(new
+                            {
+                                recordId = recordId,
+                                data = new
+                                {
+                                    formUrl = url,
+                                    invoice = Parser.Parse(formsResponse),
+                                    error = new { }
+                                }
+                            });
+                        }
+                    }
+                    catch (Exception error)
+                    {
+                        records.Add(new
+                        {
                             recordId = recordId,
-                            data = new { formUrl = url },
-                            invoice = Parser.Parse(formsResponse)
+                            data = new
+                            {
+                                formUrl = url,
+                                invoice = new { },
+                                error =  new { message = error.Message }
+                            }
                         });
                     }
                 }
